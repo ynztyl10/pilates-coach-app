@@ -21,6 +21,8 @@ type Section =
   | { kind: 'subtitle'; text: string; subType: SubtitleType }
   | { kind: 'muscles'; entries: MuscleEntry[] }
   | { kind: 'priority'; level: string; lines: string[] }
+  | { kind: 'arrowList'; items: string[] }
+  | { kind: 'starList'; items: string[] }
   | { kind: 'paragraph'; text: string };
 
 // ─── 子标题类型识别 ───────────────────────────────────────────────────────────
@@ -122,29 +124,53 @@ function parseAnatomyText(raw: string): Section[] {
 
     // 箭头行：→ 开头（允许前面有缩进）
     if (trimmedStart.startsWith('→')) {
-      // 确保有当前肌肉条目，没有则为其创建一个“未命名”占位，防止★/→丢失
-      if (!currentMuscle) {
-        currentMuscle = { name: '（未命名条目）', bullets: [] };
+      // 如果已有当前肌肉条目，归入 muscle bullet
+      if (currentMuscle) {
+        currentMuscle.bullets.push({
+          type: 'arrow',
+          text: trimmedStart.replace(/^→\s*/, ''),
+        });
+        i++;
+        continue;
       }
-      currentMuscle.bullets.push({
-        type: 'arrow',
-        text: trimmedStart.replace(/^→\s*/, ''),
-      });
+      // 没有 muscle 上下文时，收集连续箭头行为独立列表
+      flushMuscles();
+      const items: string[] = [trimmedStart.replace(/^→\s*/, '')];
       i++;
+      while (
+        i < lines.length &&
+        lines[i].trimStart().startsWith('→')
+      ) {
+        items.push(lines[i].trimStart().replace(/^→\s*/, ''));
+        i++;
+      }
+      sections.push({ kind: 'arrowList', items });
       continue;
     }
 
     // 星标行：★ 开头（允许前面有缩进）
     if (trimmedStart.startsWith('★')) {
-      // 同理，保证 currentMuscle 存在
-      if (!currentMuscle) {
-        currentMuscle = { name: '（未命名条目）', bullets: [] };
+      // 如果已有当前肌肉条目，归入 muscle bullet
+      if (currentMuscle) {
+        currentMuscle.bullets.push({
+          type: 'star',
+          text: trimmedStart.replace(/^★\s*/, ''),
+        });
+        i++;
+        continue;
       }
-      currentMuscle.bullets.push({
-        type: 'star',
-        text: trimmedStart.replace(/^★\s*/, ''),
-      });
+      // 没有 muscle 上下文时，收集连续星标行为独立列表
+      flushMuscles();
+      const items: string[] = [trimmedStart.replace(/^★\s*/, '')];
       i++;
+      while (
+        i < lines.length &&
+        lines[i].trimStart().startsWith('★')
+      ) {
+        items.push(lines[i].trimStart().replace(/^★\s*/, ''));
+        i++;
+      }
+      sections.push({ kind: 'starList', items });
       continue;
     }
 
@@ -370,6 +396,43 @@ function renderAnatomyBlock(raw: string, blockIndex: number) {
                   ))}
                 </div>
               )}
+            </div>
+          );
+        }
+
+        if (sec.kind === 'arrowList') {
+          return (
+            <div key={idx} className="space-y-2">
+              {sec.items.map((item, iIdx) => (
+                <div key={iIdx} className="flex items-start gap-2">
+                  <span className="text-[12px] text-lab-green flex-shrink-0 mt-0.5">
+                    →
+                  </span>
+                  <p className="text-[12px] text-gray-600 leading-relaxed whitespace-pre-line">
+                    {item}
+                  </p>
+                </div>
+              ))}
+            </div>
+          );
+        }
+
+        if (sec.kind === 'starList') {
+          return (
+            <div key={idx} className="space-y-2">
+              {sec.items.map((item, iIdx) => (
+                <div
+                  key={iIdx}
+                  className="flex items-start gap-2 bg-amber-50 rounded-lg px-2.5 py-2"
+                >
+                  <span className="text-[11px] text-amber-600 flex-shrink-0 mt-0.5">
+                    ★
+                  </span>
+                  <p className="text-[12px] text-amber-600 font-medium leading-relaxed whitespace-pre-line">
+                    {item}
+                  </p>
+                </div>
+              ))}
             </div>
           );
         }
