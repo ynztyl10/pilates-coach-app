@@ -1,0 +1,8 @@
+{
+  "name": "pilates-api",
+  "version": "1.0.0",
+  "main": "index.js",
+  "dependencies": {
+    "ali-oss": "^6.23.0"
+  }
+}

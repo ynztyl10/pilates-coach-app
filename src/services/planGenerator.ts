@@ -14,44 +14,34 @@ import {
 } from '../types/plan';
 import { knowledgeBase } from '../data/knowledge';
 import { getMember } from './memberService';
-
-const STORAGE_KEY = 'pilates_plans';
-
-function generateId(): string {
-  return 'plan-' + crypto.randomUUID();
-}
-
-function getAllPlans(): TrainingPlan[] {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  return raw ? JSON.parse(raw) : [];
-}
-
-function savePlans(plans: TrainingPlan[]): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(plans));
-}
+import { api } from './api';
 
 export function autoSelectKnowledge(member: Member): string[] {
-  const selected = new Set<string>();
+  const scores = new Map<string, number>();
 
-  // 按 focusAreas（部位）匹配分类
+  function addScore(id: string, delta: number) {
+    scores.set(id, (scores.get(id) || 0) + delta);
+  }
+
+  // focusAreas（部位）匹配分类 → +3 分
   if (member.focusAreas?.length) {
     knowledgeBase.forEach(k => {
       if (member.focusAreas.includes(k.category)) {
-        selected.add(k.id);
+        addScore(k.id, 3);
       }
     });
   }
 
-  // 按 painPoints（不适点名称）匹配条目名
+  // painPoints（不适点名称）匹配条目名 → +5 分（最精准）
   if (member.painPoints?.length) {
     knowledgeBase.forEach(k => {
       if (member.painPoints.includes(k.name)) {
-        selected.add(k.id);
+        addScore(k.id, 5);
       }
     });
   }
 
-  // 按 goals（训练目标）匹配标签
+  // goals（训练目标）匹配标签 → +1 分
   const goalTagMap: Record<string, string[]> = {
     posture_correction: ['体态', '姿势', '圆肩', '驼背', '头前引'],
     pain_relief: ['疼痛', '紧张', '松解'],
@@ -68,11 +58,24 @@ export function autoSelectKnowledge(member: Member): string[] {
       const match = tags.some(tag =>
         k.tags.some(t => t.includes(tag)) || k.name.includes(tag)
       );
-      if (match) selected.add(k.id);
+      if (match) addScore(k.id, 1);
     });
   });
 
-  return Array.from(selected);
+  // 按分数降序排列，返回 ID 列表
+  return Array.from(scores.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([id]) => id);
+}
+
+function inferPriority(anatomyTexts: string[]): number {
+  // 解析 anatomy 第三段（普拉提训练改善的优先顺序）
+  const priorityText = anatomyTexts[2] || '';
+  if (priorityText.includes('第一优先级')) return 1;
+  if (priorityText.includes('第二优先级')) return 2;
+  if (priorityText.includes('第三优先级')) return 3;
+  if (priorityText.includes('第四优先级')) return 4;
+  return 2; // 默认
 }
 
 function buildPlanItem(knowledgeId: string): PlanItem | null {
@@ -83,7 +86,7 @@ function buildPlanItem(knowledgeId: string): PlanItem | null {
     knowledgeId: knowledge.id,
     name: knowledge.name,
     category: knowledge.category,
-    priority: 2, // 默认优先级，后续可根据规则调整
+    priority: inferPriority(knowledge.anatomy),
     actions: knowledge.training.actions.map(a => ({
       name: a.name,
       points: a.points,
@@ -101,8 +104,10 @@ function generateTitle(member: Member, customTitle?: string): string {
   return `${member.name} - ${areas}专项训练计划`;
 }
 
-export function generatePlan(input: PlanGenerateInput): TrainingPlan {
-  const member = getMember(input.memberId);
+export async function generatePlan(
+  input: PlanGenerateInput
+): Promise<TrainingPlan> {
+  const member = await getMember(input.memberId);
   if (!member) {
     throw new Error('NOT_FOUND');
   }
@@ -122,61 +127,37 @@ export function generatePlan(input: PlanGenerateInput): TrainingPlan {
     if (item) items.push(item);
   });
 
-  // 按优先级排序（知识库中的训练优先级可通过解析 anatomy 第三段推断）
-  // 简化：按条目在知识库中的顺序保持，后续可扩展智能排序
+  // 按优先级排序
+  items.sort((a, b) => a.priority - b.priority);
 
-  const plan: TrainingPlan = {
-    id: generateId(),
+  return api.post<TrainingPlan>('/plans', {
     memberId: member.id,
     title: generateTitle(member, input.planTitle),
     items,
-    createdAt: new Date().toISOString(),
-  };
-
-  const plans = getAllPlans();
-  plans.unshift(plan);
-  savePlans(plans);
-
-  return plan;
+    notes: input.notes,
+  });
 }
 
-export function getPlan(planId: string): PlanWithMember | null {
-  const plan = getAllPlans().find(p => p.id === planId) ?? null;
-  if (!plan) return null;
-  const member = getMember(plan.memberId);
-  return { ...plan, member: member ?? undefined };
-}
-
-export function listPlans(memberId: string): PlanListResult {
-  const data = getAllPlans()
-    .filter(p => p.memberId === memberId)
-    .map(p => ({
-      id: p.id,
-      title: p.title,
-      createdAt: p.createdAt,
-      itemCount: p.items.length,
-    }));
-  return { data };
-}
-
-export function updatePlan(planId: string, input: PlanUpdateInput): TrainingPlan {
-  const plans = getAllPlans();
-  const idx = plans.findIndex(p => p.id === planId);
-  if (idx === -1) {
-    throw new Error('NOT_FOUND');
+export async function getPlan(planId: string): Promise<PlanWithMember | null> {
+  try {
+    return await api.get<PlanWithMember>(`/plans/${planId}`);
+  } catch (err: any) {
+    if (err.code === 'NOT_FOUND') return null;
+    throw err;
   }
-  const existing = plans[idx];
-  const updated: TrainingPlan = {
-    ...existing,
-    ...(input.items !== undefined && { items: input.items }),
-    ...(input.notes !== undefined && { notes: input.notes || undefined }),
-  };
-  plans[idx] = updated;
-  savePlans(plans);
-  return updated;
 }
 
-export function deletePlan(planId: string): void {
-  const plans = getAllPlans().filter(p => p.id !== planId);
-  savePlans(plans);
+export async function listPlans(memberId: string): Promise<PlanListResult> {
+  return api.get<PlanListResult>(`/plans?memberId=${encodeURIComponent(memberId)}`);
+}
+
+export async function updatePlan(
+  planId: string,
+  input: PlanUpdateInput
+): Promise<TrainingPlan> {
+  return api.put<TrainingPlan>(`/plans/${planId}`, input);
+}
+
+export async function deletePlan(planId: string): Promise<void> {
+  await api.del<void>(`/plans/${planId}`);
 }

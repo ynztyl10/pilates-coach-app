@@ -9,79 +9,32 @@ import {
   MemberUpdateInput,
   MemberListResult,
 } from '../types/member';
+import { api } from './api';
 
-const STORAGE_KEY = 'pilates_members';
-
-function generateId(): string {
-  return 'mem-' + crypto.randomUUID();
+export async function listMembers(): Promise<MemberListResult> {
+  return api.get<MemberListResult>('/members');
 }
 
-function getAllMembers(): Member[] {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  return raw ? JSON.parse(raw) : [];
+export async function createMember(input: MemberCreateInput): Promise<Member> {
+  return api.post<Member>('/members', input);
 }
 
-function saveMembers(members: Member[]): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(members));
-}
-
-export function listMembers(): MemberListResult {
-  const data = getAllMembers();
-  return { data, total: data.length };
-}
-
-export function createMember(input: MemberCreateInput): Member {
-  const now = new Date().toISOString();
-  const member: Member = {
-    id: generateId(),
-    name: input.name.trim(),
-    gender: input.gender,
-    age: input.age,
-    parous: input.parous ?? false,
-    goals: input.goals ?? [],
-    focusAreas: input.focusAreas ?? [],
-    painPoints: input.painPoints ?? [],
-    medicalNotes: input.medicalNotes?.trim() || undefined,
-    createdAt: now,
-    updatedAt: now,
-  };
-  const members = getAllMembers();
-  members.unshift(member);
-  saveMembers(members);
-  return member;
-}
-
-export function getMember(id: string): Member | null {
-  return getAllMembers().find(m => m.id === id) ?? null;
-}
-
-export function updateMember(id: string, input: MemberUpdateInput): Member {
-  const members = getAllMembers();
-  const idx = members.findIndex(m => m.id === id);
-  if (idx === -1) {
-    throw new Error('NOT_FOUND');
+export async function getMember(id: string): Promise<Member | null> {
+  try {
+    return await api.get<Member>(`/members/${id}`);
+  } catch (err: any) {
+    if (err.code === 'NOT_FOUND') return null;
+    throw err;
   }
-  const existing = members[idx];
-  const updated: Member = {
-    ...existing,
-    ...(input.name !== undefined && { name: input.name.trim() }),
-    ...(input.gender !== undefined && { gender: input.gender }),
-    ...(input.age !== undefined && { age: input.age }),
-    ...(input.parous !== undefined && { parous: input.parous }),
-    ...(input.goals !== undefined && { goals: input.goals }),
-    ...(input.focusAreas !== undefined && { focusAreas: input.focusAreas }),
-    ...(input.painPoints !== undefined && { painPoints: input.painPoints }),
-    ...(input.medicalNotes !== undefined && {
-      medicalNotes: input.medicalNotes.trim() || undefined,
-    }),
-    updatedAt: new Date().toISOString(),
-  };
-  members[idx] = updated;
-  saveMembers(members);
-  return updated;
 }
 
-export function deleteMember(id: string): void {
-  const members = getAllMembers().filter(m => m.id !== id);
-  saveMembers(members);
+export async function updateMember(
+  id: string,
+  input: MemberUpdateInput
+): Promise<Member> {
+  return api.put<Member>(`/members/${id}`, input);
+}
+
+export async function deleteMember(id: string): Promise<void> {
+  await api.del<void>(`/members/${id}`);
 }
