@@ -1,0 +1,490 @@
+openapi: 3.0.3
+info:
+  title: 普拉提教练手册 - 会员管理与训练计划生成 API
+  description: |
+    纯前端 SPA 内部模块接口规范。所有数据持久化通过 localStorage 实现。
+    本 Spec 定义会员管理（Member Management）和训练计划生成（Plan Generation）两个核心模块的契约。
+  version: 1.0.0
+
+servers:
+  - url: local://storage
+    description: localStorage 持久化层
+
+tags:
+  - name: Member
+    description: 会员生命周期管理
+  - name: TrainingPlan
+    description: 会员专属训练计划生成与管理
+
+paths:
+  /members:
+    get:
+      tags: [Member]
+      summary: 获取会员列表
+      operationId: listMembers
+      responses:
+        '200':
+          description: 会员列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Member'
+                  total:
+                    type: integer
+                    example: 5
+    post:
+      tags: [Member]
+      summary: 创建会员
+      operationId: createMember
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemberCreateInput'
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Member'
+        '400':
+          description: 参数校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+
+  /members/{memberId}:
+    parameters:
+      - name: memberId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [Member]
+      summary: 获取单个会员详情
+      operationId: getMember
+      responses:
+        '200':
+          description: 会员详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Member'
+        '404':
+          description: 会员不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+    put:
+      tags: [Member]
+      summary: 更新会员信息
+      operationId: updateMember
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemberUpdateInput'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Member'
+        '404':
+          description: 会员不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+    delete:
+      tags: [Member]
+      summary: 删除会员
+      operationId: deleteMember
+      responses:
+        '204':
+          description: 删除成功
+        '404':
+          description: 会员不存在
+
+  /members/{memberId}/plans:
+    parameters:
+      - name: memberId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [TrainingPlan]
+      summary: 获取会员的训练计划列表
+      operationId: listMemberPlans
+      responses:
+        '200':
+          description: 计划列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TrainingPlanSummary'
+    post:
+      tags: [TrainingPlan]
+      summary: 为会员生成训练计划
+      operationId: generatePlan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlanGenerateInput'
+      responses:
+        '201':
+          description: 生成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrainingPlan'
+        '400':
+          description: 输入参数错误或无匹配条目
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+
+  /plans/{planId}:
+    parameters:
+      - name: planId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [TrainingPlan]
+      summary: 获取训练计划详情
+      operationId: getPlan
+      responses:
+        '200':
+          description: 计划详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrainingPlan'
+        '404':
+          description: 计划不存在
+    put:
+      tags: [TrainingPlan]
+      summary: 更新训练计划（调整条目顺序、增删条目、修改备注）
+      operationId: updatePlan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlanUpdateInput'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrainingPlan'
+        '404':
+          description: 计划不存在
+    delete:
+      tags: [TrainingPlan]
+      summary: 删除训练计划
+      operationId: deletePlan
+      responses:
+        '204':
+          description: 删除成功
+
+components:
+  schemas:
+    Member:
+      type: object
+      required: [id, name, gender, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          description: UUID v4
+          example: "mem-550e8400-e29b-41d4-a716-446655440000"
+        name:
+          type: string
+          description: 会员姓名
+          maxLength: 20
+          example: "张女士"
+        gender:
+          type: string
+          enum: [female, male, other]
+          description: 性别
+          example: "female"
+        age:
+          type: integer
+          minimum: 10
+          maximum: 100
+          description: 年龄
+          example: 32
+        parous:
+          type: boolean
+          description: 是否生育过，影响腹直肌修复、盆底肌训练等推荐
+          example: true
+        goals:
+          type: array
+          items:
+            type: string
+            enum:
+              - posture_correction
+              - pain_relief
+              - post_surgery_rehab
+              - core_strength
+              - flexibility
+              - weight_loss
+              - prenatal
+          description: 训练目标（可多选）
+        focusAreas:
+          type: array
+          items:
+            type: string
+          description: 重点关注部位，从知识库 category 中选取
+          example: ["脊柱", "骨盆"]
+        painPoints:
+          type: array
+          items:
+            type: string
+          description: 当前疼痛或不适点，对应知识库条目 name
+          example: ["下腰痛", "骶髂关节疼痛"]
+        medicalNotes:
+          type: string
+          maxLength: 500
+          description: 医学备注/禁忌症说明
+          example: "腰椎间盘突出L4-L5，医生建议避免前屈负重"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    MemberCreateInput:
+      type: object
+      required: [name, gender]
+      properties:
+        name:
+          type: string
+          maxLength: 20
+        gender:
+          type: string
+          enum: [female, male, other]
+        age:
+          type: integer
+          minimum: 10
+          maximum: 100
+        parous:
+          type: boolean
+          description: 是否生育过
+        goals:
+          type: array
+          items:
+            type: string
+            enum:
+              - posture_correction
+              - pain_relief
+              - post_surgery_rehab
+              - core_strength
+              - flexibility
+              - weight_loss
+              - prenatal
+        focusAreas:
+          type: array
+          items:
+            type: string
+        painPoints:
+          type: array
+          items:
+            type: string
+        medicalNotes:
+          type: string
+          maxLength: 500
+
+    MemberUpdateInput:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 20
+        gender:
+          type: string
+          enum: [female, male, other]
+        age:
+          type: integer
+          minimum: 10
+          maximum: 100
+        parous:
+          type: boolean
+        goals:
+          type: array
+          items:
+            type: string
+        focusAreas:
+          type: array
+          items:
+            type: string
+        painPoints:
+          type: array
+          items:
+            type: string
+        medicalNotes:
+          type: string
+          maxLength: 500
+
+    TrainingPlan:
+      type: object
+      required: [id, memberId, title, createdAt, items]
+      properties:
+        id:
+          type: string
+          description: UUID v4
+        memberId:
+          type: string
+          description: 关联会员 ID
+        title:
+          type: string
+          description: 计划标题（自动生成）
+          example: "张女士 - 脊柱与骨盆专项训练计划"
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlanItem'
+          description: 计划条目，按优先级排序
+        createdAt:
+          type: string
+          format: date-time
+        notes:
+          type: string
+          description: 教练备注
+
+    TrainingPlanSummary:
+      type: object
+      required: [id, title, createdAt, itemCount]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        itemCount:
+          type: integer
+          description: 计划条目数
+
+    PlanItem:
+      type: object
+      required: [knowledgeId, name, category, priority, actions, notes]
+      properties:
+        knowledgeId:
+          type: string
+          description: 引用知识库条目 ID
+        name:
+          type: string
+          description: 条目名称
+        category:
+          type: string
+          description: 所属分类
+        priority:
+          type: integer
+          minimum: 1
+          maximum: 4
+          description: 训练优先级（1-4）
+        actions:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              points:
+                type: array
+                items:
+                  type: string
+          description: 从知识库提取的全部推荐动作
+        notes:
+          type: array
+          items:
+            type: string
+          description: 针对该会员的教学注意事项
+        contraindications:
+          type: array
+          items:
+            type: string
+          description: 该会员需特别注意的禁忌症（从知识库提取）
+
+    PlanGenerateInput:
+      type: object
+      required: [memberId, selectedKnowledgeIds]
+      properties:
+        memberId:
+          type: string
+          description: 目标会员 ID
+        selectedKnowledgeIds:
+          type: array
+          items:
+            type: string
+          description: 教练手动选择的知识库条目 ID 列表
+        autoSelect:
+          type: boolean
+          default: false
+          description: 是否根据会员 focusAreas/painPoints 自动匹配知识库条目
+        planTitle:
+          type: string
+          maxLength: 50
+          description: 自定义计划标题（可选）
+
+    PlanUpdateInput:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlanItem'
+          description: 调整后的计划条目列表（可重排序、增删）
+        notes:
+          type: string
+          description: 教练备注
+
+    ValidationError:
+      type: object
+      properties:
+        code:
+          type: string
+          example: "VALIDATION_ERROR"
+        message:
+          type: string
+          example: "会员姓名不能为空"
+        field:
+          type: string
+          example: "name"
+
+    NotFoundError:
+      type: object
+      properties:
+        code:
+          type: string
+          example: "NOT_FOUND"
+        message:
+          type: string
+          example: "会员不存在"
