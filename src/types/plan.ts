@@ -45,6 +45,7 @@ export interface PlanGenerateInput {
   selectedKnowledgeIds: string[];
   autoSelect?: boolean;
   planTitle?: string;
+  notes?: string;
 }
 
 export interface PlanUpdateInput {

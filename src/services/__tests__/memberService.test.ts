@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   listMembers,
   createMember,
@@ -32,7 +32,6 @@ describe('MemberService', () => {
     });
 
     // Override fetch to handle POST/PUT/DELETE with dynamic paths
-    const originalMock = globalThis.fetch as any;
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input.toString();
       const path = new URL(url).pathname;

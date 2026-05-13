@@ -1,6 +1,6 @@
 import { vi } from 'vitest';
 
-export function mockFetch(responseMap: Record<string, () => Promise<Response>>) {
+export function mockFetch(responseMap: Record<string, (...args: any[]) => Promise<Response>>) {
   const originalFetch = globalThis.fetch;
 
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {

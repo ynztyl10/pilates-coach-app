@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { PilatesKnowledge } from '../data/knowledge';
 
 interface DetailProps {
