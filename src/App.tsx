@@ -10,9 +10,11 @@ import MemberDetail from './components/MemberDetail';
 import PlanGenerator from './components/PlanGenerator';
 import PlanPreview from './components/PlanPreview';
 import { exportPlanPDF } from './services/pdfExport';
+import PersonalizedPlanInput from './components/PersonalizedPlanInput';
+import PersonalizedPlanPreview from './components/PersonalizedPlanPreview';
 
 type Tab = 'handbook' | 'members';
-type MemberView = 'list' | 'form' | 'detail' | 'planGenerator' | 'planPreview';
+type MemberView = 'list' | 'form' | 'detail' | 'planGenerator' | 'planPreview' | 'personalizedPlanInput' | 'personalizedPlanPreview';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('handbook');
@@ -60,6 +62,16 @@ export default function App() {
   const goToPlanPreview = (planId: string) => {
     setSelectedPlanId(planId);
     setMemberView('planPreview');
+  };
+
+  const goToPersonalizedPlanInput = (member: Member) => {
+    setSelectedMember(member);
+    setMemberView('personalizedPlanInput');
+  };
+
+  const goToPersonalizedPlanPreview = (planId: string) => {
+    setSelectedPlanId(planId);
+    setMemberView('personalizedPlanPreview');
   };
 
   const handleMemberSaved = () => {
@@ -138,6 +150,7 @@ export default function App() {
                 onEdit={goToMemberForm}
                 onGeneratePlan={goToPlanGenerator}
                 onViewPlan={goToPlanPreview}
+                onGeneratePersonalizedPlan={goToPersonalizedPlanInput}
               />
             )}
             {memberView === 'planGenerator' && selectedMember && (
@@ -152,6 +165,19 @@ export default function App() {
                 planId={selectedPlanId}
                 onBack={() => selectedMember ? goToMemberDetail(selectedMember) : goToMemberList()}
                 onExportPDF={exportPlanPDF}
+              />
+            )}
+            {memberView === 'personalizedPlanInput' && selectedMember && (
+              <PersonalizedPlanInput
+                member={selectedMember}
+                onBack={() => goToMemberDetail(selectedMember)}
+                onPlanGenerated={goToPersonalizedPlanPreview}
+              />
+            )}
+            {memberView === 'personalizedPlanPreview' && (
+              <PersonalizedPlanPreview
+                planId={selectedPlanId}
+                onBack={() => selectedMember ? goToMemberDetail(selectedMember) : goToMemberList()}
               />
             )}
           </main>

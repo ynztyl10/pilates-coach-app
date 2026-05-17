@@ -10,9 +10,10 @@ interface MemberDetailProps {
   onEdit: (member: Member) => void;
   onGeneratePlan: (member: Member) => void;
   onViewPlan: (planId: string) => void;
+  onGeneratePersonalizedPlan?: (member: Member) => void;
 }
 
-export default function MemberDetail({ member, onBack, onEdit, onGeneratePlan, onViewPlan }: MemberDetailProps) {
+export default function MemberDetail({ member, onBack, onEdit, onGeneratePlan, onViewPlan, onGeneratePersonalizedPlan }: MemberDetailProps) {
   const [plans, setPlans] = useState<TrainingPlanSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -150,14 +151,23 @@ export default function MemberDetail({ member, onBack, onEdit, onGeneratePlan, o
         </div>
       </div>
 
-      {/* Generate Plan Button */}
-      <div className="absolute bottom-0 left-0 right-0 p-4 bg-white border-t border-black/5">
+      {/* Action Buttons */}
+      <div className="absolute bottom-0 left-0 right-0 p-4 bg-white border-t border-black/5 space-y-2">
+        {onGeneratePersonalizedPlan && (
+          <button
+            onClick={() => onGeneratePersonalizedPlan(member)}
+            className="w-full bg-lab-dark text-white py-3 rounded-xl font-bold text-[15px] active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
+          >
+            <span className="iconify ph--sparkle text-lg"></span>
+            智能综合训练计划
+          </button>
+        )}
         <button
           onClick={() => onGeneratePlan(member)}
           className="w-full bg-lab-green text-white py-3 rounded-xl font-bold text-[15px] active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
         >
           <span className="iconify ph--magic-wand text-lg"></span>
-          生成训练计划
+          生成专项训练计划
         </button>
       </div>
     </div>
