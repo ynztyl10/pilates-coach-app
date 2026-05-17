@@ -15,6 +15,7 @@ const ossClient = new OSS({
 
 const MEMBERS_PREFIX = 'data/members/';
 const PLANS_PREFIX = 'data/plans/';
+const PERSONALIZED_PLANS_PREFIX = 'data/personalized-plans/';
 
 function corsHeaders() {
   return {
@@ -222,6 +223,76 @@ async function deletePlan(id) {
   return noContent();
 }
 
+// ===== Personalized Plans =====
+
+async function listPersonalizedPlans(query) {
+  const memberId = query.memberId;
+  const ids = await listIds(PERSONALIZED_PLANS_PREFIX);
+  const plans = [];
+  for (const id of ids) {
+    const plan = await getJson(`${PERSONALIZED_PLANS_PREFIX}${id}.json`);
+    if (plan && (!memberId || plan.memberId === memberId)) {
+      plans.push({
+        id: plan.id,
+        title: plan.title,
+        createdAt: plan.createdAt,
+      });
+    }
+  }
+  plans.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  return ok({ data: plans });
+}
+
+async function createPersonalizedPlan(body) {
+  if (!body.memberId) return badRequest('memberId 不能为空', 'memberId');
+  if (!body.title?.trim()) return badRequest('计划标题不能为空', 'title');
+
+  const plan = {
+    id: 'pplan-' + crypto.randomUUID(),
+    memberId: body.memberId,
+    title: body.title.trim(),
+    createdAt: new Date().toISOString(),
+    homework: body.homework || [],
+    classModules: body.classModules || [],
+    contraindications: body.contraindications || [],
+    specialNotes: body.specialNotes || [],
+  };
+
+  await putJson(`${PERSONALIZED_PLANS_PREFIX}${plan.id}.json`, plan);
+  return created(plan);
+}
+
+async function getPersonalizedPlan(id) {
+  const plan = await getJson(`${PERSONALIZED_PLANS_PREFIX}${id}.json`);
+  if (!plan) return notFound('计划不存在');
+
+  const member = await getJson(`${MEMBERS_PREFIX}${plan.memberId}.json`);
+  return ok({ ...plan, member: member || undefined });
+}
+
+async function updatePersonalizedPlan(id, body) {
+  const plan = await getJson(`${PERSONALIZED_PLANS_PREFIX}${id}.json`);
+  if (!plan) return notFound('计划不存在');
+
+  const updated = {
+    ...plan,
+    ...(body.title !== undefined && { title: body.title.trim() }),
+    ...(body.homework !== undefined && { homework: body.homework }),
+    ...(body.classModules !== undefined && { classModules: body.classModules }),
+    ...(body.contraindications !== undefined && { contraindications: body.contraindications }),
+    ...(body.specialNotes !== undefined && { specialNotes: body.specialNotes }),
+    updatedAt: new Date().toISOString(),
+  };
+
+  await putJson(`${PERSONALIZED_PLANS_PREFIX}${id}.json`, updated);
+  return ok(updated);
+}
+
+async function deletePersonalizedPlan(id) {
+  await deleteObject(`${PERSONALIZED_PLANS_PREFIX}${id}.json`);
+  return noContent();
+}
+
 // ===== Router =====
 
 function parsePath(path) {
@@ -308,6 +379,18 @@ exports.handler = (event, context, callback) => {
         if (method === 'GET') return await getPlan(id);
         if (method === 'PUT') return await updatePlan(id, body);
         if (method === 'DELETE') return await deletePlan(id);
+      }
+
+      // Personalized Plans
+      if (segments[0] === 'personalized-plans' && !segments[1]) {
+        if (method === 'GET') return await listPersonalizedPlans(query);
+        if (method === 'POST') return await createPersonalizedPlan(body);
+      }
+      if (segments[0] === 'personalized-plans' && segments[1]) {
+        const id = segments[1];
+        if (method === 'GET') return await getPersonalizedPlan(id);
+        if (method === 'PUT') return await updatePersonalizedPlan(id, body);
+        if (method === 'DELETE') return await deletePersonalizedPlan(id);
       }
 
       return response(404, { code: 'NOT_FOUND', message: '接口不存在' });
